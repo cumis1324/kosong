@@ -1,5 +1,5 @@
 # Use official Dart image from Docker Hub
-FROM google/dart:^3.0.0
+FROM google/dart:3.0.0
 
 # Set working directory inside the container
 WORKDIR /app

@@ -8,7 +8,7 @@ WORKDIR /app
 COPY pubspec.* ./
 
 # Get dependencies (you may need to add more dependencies if required)
-RUN dart pub get
+RUN flutter pub get
 
 # Copy the entire project directory to the container
 COPY . .

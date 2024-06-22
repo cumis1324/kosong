@@ -175,16 +175,17 @@ Future<void> storeToFirestore(Map<String, dynamic> movieData, String extractedNa
 }
 
 Map<String, String>? extractNameAndQuality(String filename) {
-  final regExp = RegExp(r'(\d+)\.(.*?)\.(\d{4})\.(\d+p)(?:\.(?:NF|DNSP|AMZN))?\.(.*?)\..*', caseSensitive: false);
+  final regExp = RegExp(r'(?:(\d+)\.)?(.*?)\.(\d{4})\.(\d+p)(?:\.(?:NF|DNSP|AMZN))?\.(.*?)\..*', caseSensitive: false);
   final match = regExp.firstMatch(filename);
   
   if (match != null) {
-    final name = match.group(2)?.replaceAll('.', ' '); // Replace dots with spaces in the title
+    final initialDigits = match.group(1);
+    final name = '${initialDigits ?? ''} ${match.group(2)?.replaceAll('.', ' ')}'.trim(); // Concatenate and replace dots with spaces
     final year = match.group(3);
     final qualityVideo = match.group(4);
     final qualityName = match.group(5);
 
-    if (name != null && year != null && qualityVideo != null && qualityName != null) {
+    if ((initialDigits != null || match.group(2) != null) && year != null && qualityVideo != null && qualityName != null) {
       return {
         'name': name.trim(),
         'year': year,
@@ -196,6 +197,7 @@ Map<String, String>? extractNameAndQuality(String filename) {
 
   return null;
 }
+
 
 
 void main() {

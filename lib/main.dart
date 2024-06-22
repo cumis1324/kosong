@@ -47,6 +47,7 @@ Future<void> handleRequest() async {
                   extractedData['qualityName']!,
                   extractedData['qualityVideo']!
                 );
+                print('Added Movie ${extractedData['name']} (${extractedData['year']})');
               } else {
                 print('No movie found for ${extractedData['name']} (${extractedData['year']})');
               }

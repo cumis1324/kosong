@@ -1,5 +1,6 @@
 # Use official Dart image from Docker Hub
 FROM dart:stable AS build
+FROM ghcr.io/cirruslabs/flutter:3.22.2
 
 # Set working directory inside the container
 WORKDIR /app

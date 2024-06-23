@@ -20,7 +20,7 @@ jobs:
         sdk: 'stable'
 
     - name: Install dependencies
-      run: dart pub get
+      run: flutter pub get
 
     - name: Run Dart script
       run: dart lib/main.dart

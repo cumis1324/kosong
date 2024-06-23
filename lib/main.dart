@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
-
 import 'package:http/http.dart' as http;
+import 'package:mongo_dart/mongo_dart.dart' as mongo;
 
 const INDEX_URLS = [
   'https://drive.nfgplusmirror.workers.dev/1:/Movie/',
@@ -11,13 +11,16 @@ const INDEX_URLS = [
   // Add more index URLs as needed
 ];
 const TMDB_API_KEY = '75399494372c92bd800f70079dff476b';
-const FIREBASE_PROJECT_ID = 'nfgview-160c7';
-const FIREBASE_API_KEY = 'AIzaSyCiFlbEyGtH7ijFWUFBhRtTE1EDICqHw3o';
-const FIREBASE_COLLECTION = 'movies';
+const MONGO_DB_URL = 'mongodb+srv://cekitbro:huntupeda@nfgplus.taewopc.mongodb.net/nfgview?retryWrites=true&w=majority&appName=nfgplus';
+const MONGO_COLLECTION_NAME = 'movies';
 
 Future<void> handleRequest() async {
   String nextPageToken = '';
   int pageIndex = 0;
+
+  final db = await mongo.Db.create(MONGO_DB_URL);
+  await db.open();
+  final collection = db.collection(MONGO_COLLECTION_NAME);
 
   for (final indexUrl in INDEX_URLS) {
     nextPageToken = '';
@@ -35,7 +38,8 @@ Future<void> handleRequest() async {
             try {
               final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['year']!, TMDB_API_KEY);
               if (tmdbData != null && tmdbData.isNotEmpty) {
-                await storeToFirestore(
+                await storeToMongoDB(
+                  collection,
                   tmdbData,
                   extractedData['name']!,
                   extractedData['year']!,
@@ -67,6 +71,7 @@ Future<void> handleRequest() async {
     }
   }
 
+  await db.close();
   print('Data processing complete');
 }
 
@@ -117,60 +122,78 @@ Future<Map<String, dynamic>> fetchTmdbData(String name, String year, String apiK
   }
 }
 
-Future<void> storeToFirestore(Map<String, dynamic> movieData, String extractedName, String extractedYear, String filename, String filenameUrl, String filenameModifiedTime, String filenameSize, String mimeType, String qualityName, String qualityVideo) async {
+Future<void> storeToMongoDB(
+  mongo.DbCollection collection,
+  Map<String, dynamic> movieData,
+  String extractedName,
+  String extractedYear,
+  String filename,
+  String filenameUrl,
+  String filenameModifiedTime,
+  String filenameSize,
+  String mimeType,
+  String qualityName,
+  String qualityVideo
+) async {
   final movieId = movieData['id'].toString();
-  final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$movieId?key=$FIREBASE_API_KEY';
 
-  final payload = {
-    'fields': {
-      'id': {'integerValue': movieData['id']},
-      'title': {'stringValue': movieData['title']},
-      'genre_ids': {
-        'arrayValue': {
-          'values': movieData['genre_ids'].map((id) => {'integerValue': id}).toList()
-        }
-      },
-      'original_language': {'stringValue': movieData['original_language']},
-      'original_title': {'stringValue': movieData['original_title']},
-      'popularity': {'doubleValue': movieData['popularity']},
-      'vote_count': {'integerValue': movieData['vote_count']},
-      'vote_average': {'doubleValue': movieData['vote_average']},
-      'overview': {'stringValue': movieData['overview']},
-      'release_date': {'stringValue': movieData['release_date']},
-      'poster_path': {'stringValue': 'https://image.tmdb.org/t/p/w500${movieData['poster_path']}'},
-      'backdrop_path': {'stringValue': 'https://image.tmdb.org/t/p/w1280${movieData['backdrop_path']}'},
-      'filenames': {
-        'arrayValue': {
-          'values': [
-            {
-              'mapValue': {
-                'fields': {
-                  'filename': {'stringValue': filename},
-                  'filename_url': {'stringValue': filenameUrl},
-                  'mimeType': {'stringValue': mimeType},
-                  'qualityName': {'stringValue': qualityName},
-                  'qualityVideo': {'stringValue': qualityVideo},
-                  'size': {'stringValue': filenameSize},
-                  'lastModified': {'stringValue': filenameModifiedTime},
-                }
-              }
-            }
-          ]
-        }
+  final document = {
+    'id': movieData['id'],
+    'title': movieData['title'],
+    'genre_ids': movieData['genre_ids'],
+    'original_language': movieData['original_language'],
+    'original_title': movieData['original_title'],
+    'popularity': movieData['popularity'],
+    'vote_count': movieData['vote_count'],
+    'vote_average': movieData['vote_average'],
+    'overview': movieData['overview'],
+    'release_date': movieData['release_date'],
+    'poster_path': 'https://image.tmdb.org/t/p/w500${movieData['poster_path']}',
+    'backdrop_path': 'https://image.tmdb.org/t/p/w1280${movieData['backdrop_path']}',
+    'filenames': [
+      {
+        'filename': filename,
+        'filename_url': filenameUrl,
+        'mimeType': mimeType,
+        'qualityName': qualityName,
+        'qualityVideo': qualityVideo,
+        'size': filenameSize,
+        'lastModified': filenameModifiedTime,
       }
-    }
+    ]
   };
 
-  final response = await http.patch(
-    Uri.parse(firestoreUrl),
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: jsonEncode(payload),
-  );
-
-  if (response.statusCode != 200) {
-    throw Exception('Failed to store data in Firestore');
+  try {
+    await collection.update(
+      mongo.where.eq('id', movieData['id']),
+      mongo.modify.set('id', movieData['id'])
+        .set('title', movieData['title'])
+        .set('genre_ids', movieData['genre_ids'])
+        .set('original_language', movieData['original_language'])
+        .set('original_title', movieData['original_title'])
+        .set('popularity', movieData['popularity'])
+        .set('vote_count', movieData['vote_count'])
+        .set('vote_average', movieData['vote_average'])
+        .set('overview', movieData['overview'])
+        .set('release_date', movieData['release_date'])
+        .set('poster_path', 'https://image.tmdb.org/t/p/w500${movieData['poster_path']}')
+        .set('backdrop_path', 'https://image.tmdb.org/t/p/w1280${movieData['backdrop_path']}')
+        .set('filenames', [
+          {
+            'filename': filename,
+            'filename_url': filenameUrl,
+            'mimeType': mimeType,
+            'qualityName': qualityName,
+            'qualityVideo': qualityVideo,
+            'size': filenameSize,
+            'lastModified': filenameModifiedTime,
+          }
+        ]),
+      upsert: true,
+    );
+  } catch (e) {
+    print('Error storing data to MongoDB: $e');
+    rethrow;
   }
 }
 
@@ -197,8 +220,6 @@ Map<String, String>? extractNameAndQuality(String filename) {
 
   return null;
 }
-
-
 
 void main() {
   handleRequest().catchError((error) {

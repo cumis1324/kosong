@@ -12,17 +12,20 @@ const INDEX_URLS = [
   // Add more index URLs as needed
 ];
 const TMDB_API_KEY = '75399494372c92bd800f70079dff476b';
-const MONGO_URI = 'mongodb+srv://cekitbro:huntupeda@nfgweb.13spjec.mongodb.net/?retryWrites=true&w=majority&appName=nfgweb';
+const MONGO_DB_URL = 'mongodb+srv://cekitbro:huntupeda@nfgweb.13spjec.mongodb.net/?retryWrites=true&w=majority&appName=nfgweb';
 const MONGO_DB_NAME = 'nfgweb';
 const MONGO_COLLECTION_NAME = 'movies';
 
 Future<void> handleRequest() async {
-  await connectToMongo(); // Connect to MongoDB
-
   String nextPageToken = '';
   int pageIndex = 0;
 
+  final db = await mongo.Db.create(MONGO_DB_URL);
+  
   try {
+    await db.open();
+    final collection = db.collection(MONGO_COLLECTION_NAME);
+
     for (final indexUrl in INDEX_URLS) {
       nextPageToken = '';
       pageIndex = 0;
@@ -39,7 +42,8 @@ Future<void> handleRequest() async {
               try {
                 final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['year']!, TMDB_API_KEY);
                 if (tmdbData != null && tmdbData.isNotEmpty) {
-                  await storeToMongo(
+                  await storeToMongoDB(
+                    collection,
                     tmdbData,
                     extractedData['name']!,
                     extractedData['year']!,
@@ -70,23 +74,12 @@ Future<void> handleRequest() async {
         }
       }
     }
+  } catch (e) {
+    print('Error connecting to MongoDB: $e');
   } finally {
-    await closeMongoConnection(); // Close MongoDB connection
+    await db.close();
+    print('Data processing complete');
   }
-
-  print('Data processing complete');
-}
-
-Future<void> connectToMongo() async {
-  final db = Db(MONGO_URI);
-  await db.open();
-  print('Connected to MongoDB');
-}
-
-Future<void> closeMongoConnection() async {
-  final db = Db(MONGO_URI);
-  await db.close();
-  print('Disconnected from MongoDB');
 }
 
 Future<Map<String, dynamic>> fetchScraperData(String url, String nextPageToken, int pageIndex) async {
@@ -136,15 +129,25 @@ Future<Map<String, dynamic>> fetchTmdbData(String name, String year, String apiK
   }
 }
 
-Future<void> storeToMongo(Map<String, dynamic> movieData, String extractedName, String extractedYear, String filename, String filenameUrl, String filenameModifiedTime, String filenameSize, String mimeType, String qualityName, String qualityVideo) async {
-  final db = Db(MONGO_URI);
-  await db.open();
-  final collection = db.collection(MONGO_COLLECTION_NAME);
+Future<void> storeToMongoDB(
+  mongo.DbCollection collection,
+  Map<String, dynamic> movieData,
+  String extractedName,
+  String extractedYear,
+  String filename,
+  String filenameUrl,
+  String filenameModifiedTime,
+  String filenameSize,
+  String mimeType,
+  String qualityName,
+  String qualityVideo
+) async {
+  final movieId = movieData['id'].toString();
 
-  final movieDocument = {
+  final document = {
     'id': movieData['id'],
     'title': movieData['title'],
-    'genre_ids': movieData['genre_ids'].map((id) => id).toList(),
+    'genre_ids': movieData['genre_ids'],
     'original_language': movieData['original_language'],
     'original_title': movieData['original_title'],
     'popularity': movieData['popularity'],
@@ -167,10 +170,33 @@ Future<void> storeToMongo(Map<String, dynamic> movieData, String extractedName, 
     ]
   };
 
-  await collection.insert(movieDocument);
-  print('Added Movie $extractedName ($extractedYear) to MongoDB');
-
-  await db.close();
+  await collection.updateOne(
+    mongo.where.eq('id', movieData['id']),
+    mongo.modify.set('id', movieData['id'])
+                  .set('title', movieData['title'])
+                  .set('genre_ids', movieData['genre_ids'])
+                  .set('original_language', movieData['original_language'])
+                  .set('original_title', movieData['original_title'])
+                  .set('popularity', movieData['popularity'])
+                  .set('vote_count', movieData['vote_count'])
+                  .set('vote_average', movieData['vote_average'])
+                  .set('overview', movieData['overview'])
+                  .set('release_date', movieData['release_date'])
+                  .set('poster_path', 'https://image.tmdb.org/t/p/w500${movieData['poster_path']}')
+                  .set('backdrop_path', 'https://image.tmdb.org/t/p/w1280${movieData['backdrop_path']}')
+                  .set('filenames', [
+                    {
+                      'filename': filename,
+                      'filename_url': filenameUrl,
+                      'mimeType': mimeType,
+                      'qualityName': qualityName,
+                      'qualityVideo': qualityVideo,
+                      'size': filenameSize,
+                      'lastModified': filenameModifiedTime,
+                    }
+                  ]),
+    upsert: true,
+  );
 }
 
 Map<String, String>? extractNameAndQuality(String filename) {
@@ -181,7 +207,8 @@ Map<String, String>? extractNameAndQuality(String filename) {
     final initialDigits = match.group(1);
     final name = '${initialDigits ?? ''} ${match.group(2)?.replaceAll('.', ' ')}'.trim(); // Concatenate and replace dots with spaces
     final year = match.group(3);
-    final qualityVideo = match.group(4);
+    final qualityVideo = match.group
+
     final qualityName = match.group(5);
 
     if ((initialDigits != null || match.group(2) != null) && year != null && qualityVideo != null && qualityName != null) {

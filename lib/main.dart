@@ -22,55 +22,58 @@ Future<void> handleRequest() async {
   String nextPageToken = '';
   int pageIndex = 0;
 
-  for (final indexUrl in INDEX_URLS) {
-    nextPageToken = '';
-    pageIndex = 0;
-    bool hasNextPage = true;
+  try {
+    for (final indexUrl in INDEX_URLS) {
+      nextPageToken = '';
+      pageIndex = 0;
+      bool hasNextPage = true;
 
-    while (hasNextPage) {
-      final data = await fetchScraperData(indexUrl, nextPageToken, pageIndex);
-      final files = data['data']['files'];
+      while (hasNextPage) {
+        final data = await fetchScraperData(indexUrl, nextPageToken, pageIndex);
+        final files = data['data']['files'];
 
-      for (final file in files) {
-        if (file['mimeType'] != 'application/vnd.google-apps.folder') {
-          final extractedData = extractNameAndQuality(file['name']);
-          if (extractedData != null) {
-            try {
-              final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['year']!, TMDB_API_KEY);
-              if (tmdbData != null && tmdbData.isNotEmpty) {
-                await storeToMongo(
-                  tmdbData,
-                  extractedData['name']!,
-                  extractedData['year']!,
-                  file['name'],
-                  indexUrl + Uri.encodeComponent(file['name']),
-                  file['modifiedTime'],
-                  file['size'],
-                  file['mimeType'],
-                  extractedData['qualityName']!,
-                  extractedData['qualityVideo']!
-                );
-                print('Added Movie ${extractedData['name']} (${extractedData['year']})');
-              } else {
-                print('No movie found for ${extractedData['name']} (${extractedData['year']})');
+        for (final file in files) {
+          if (file['mimeType'] != 'application/vnd.google-apps.folder') {
+            final extractedData = extractNameAndQuality(file['name']);
+            if (extractedData != null) {
+              try {
+                final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['year']!, TMDB_API_KEY);
+                if (tmdbData != null && tmdbData.isNotEmpty) {
+                  await storeToMongo(
+                    tmdbData,
+                    extractedData['name']!,
+                    extractedData['year']!,
+                    file['name'],
+                    indexUrl + Uri.encodeComponent(file['name']),
+                    file['modifiedTime'],
+                    file['size'],
+                    file['mimeType'],
+                    extractedData['qualityName']!,
+                    extractedData['qualityVideo']!
+                  );
+                  print('Added Movie ${extractedData['name']} (${extractedData['year']})');
+                } else {
+                  print('No movie found for ${extractedData['name']} (${extractedData['year']})');
+                }
+              } catch (e) {
+                print('Error fetching TMDB data for ${extractedData['name']} (${extractedData['year']}): $e');
               }
-            } catch (e) {
-              print('Error fetching TMDB data for ${extractedData['name']} (${extractedData['year']}): $e');
             }
           }
         }
-      }
 
-      if (data.containsKey('nextPageToken')) {
-        nextPageToken = data['nextPageToken'];
-        pageIndex++;
-      } else {
-        hasNextPage = false;
+        if (data.containsKey('nextPageToken')) {
+          nextPageToken = data['nextPageToken'];
+          pageIndex++;
+        } else {
+          hasNextPage = false;
+        }
       }
     }
+  } finally {
+    await closeMongoConnection(); // Close MongoDB connection
   }
 
-  await closeMongoConnection(); // Close MongoDB connection
   print('Data processing complete');
 }
 
@@ -80,8 +83,9 @@ Future<void> connectToMongo() async {
   print('Connected to MongoDB');
 }
 
-void closeMongoConnection() {
-  Db(MONGO_URI).close();
+Future<void> closeMongoConnection() async {
+  final db = Db(MONGO_URI);
+  await db.close();
   print('Disconnected from MongoDB');
 }
 

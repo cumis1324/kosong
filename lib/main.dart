@@ -10,8 +10,8 @@ const INDEX_URLS = [
   'https://drive3.nfgplusmirror.workers.dev/0:/Movie/'
   // Add more index URLs as needed
 ];
-const TMDB_API_KEY = 'YOUR_TMDB_API_KEY';
-const MONGO_DB_URL = 'YOUR_MONGO_DB_URL';
+const TMDB_API_KEY = '75399494372c92bd800f70079dff476b';
+const MONGO_DB_URL = 'mongodb+srv://cekitbro:huntupeda@nfgplus.taewopc.mongodb.net/nfgview?retryWrites=true&w=majority&appName=nfgplus';
 const MONGO_DB_NAME = 'nfgview';
 const MONGO_COLLECTION_NAME = 'movies';
 

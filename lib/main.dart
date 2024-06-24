@@ -11,9 +11,7 @@ const INDEX_URLS = [
   // Add more index URLs as needed
 ];
 const TMDB_API_KEY = '75399494372c92bd800f70079dff476b';
-const MONGO_DB_URL =
-    'mongodb+srv://cekitbro:huntupeda@nfgplus.taewopc.mongodb.net/nfgview'
-    '?retryWrites=true&w=majority&ssl=true&appName=nfgplus';
+const MONGO_DB_URL = 'mongodb+srv://cekitbro:huntupeda@nfgplus.taewopc.mongodb.net/nfgview?retryWrites=true&w=majority&ssl=true&appName=nfgplus';
 const MONGO_DB_NAME = 'nfgview';
 const MONGO_COLLECTION_NAME = 'movies';
 

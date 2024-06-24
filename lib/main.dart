@@ -11,7 +11,9 @@ const INDEX_URLS = [
   // Add more index URLs as needed
 ];
 const TMDB_API_KEY = '75399494372c92bd800f70079dff476b';
-const MONGO_DB_URL = 'mongodb+srv://cekitbro:huntupeda@nfgplus.taewopc.mongodb.net/nfgview?retryWrites=true&w=majority&appName=nfgplus';
+const MONGO_DB_URL =
+    'mongodb+srv://cekitbro:huntupeda@nfgplus.taewopc.mongodb.net/nfgview'
+    '?retryWrites=true&w=majority&ssl=true&appName=nfgplus';
 const MONGO_DB_NAME = 'nfgview';
 const MONGO_COLLECTION_NAME = 'movies';
 
@@ -19,8 +21,8 @@ Future<void> handleRequest() async {
   String nextPageToken = '';
   int pageIndex = 0;
 
-  final db = await mongo.Db.create(MONGO_DB_URL);
-  
+  final db = mongo.Db(MONGO_DB_URL);
+
   try {
     await db.open();
     final collection = db.collection(MONGO_COLLECTION_NAME);
@@ -39,27 +41,32 @@ Future<void> handleRequest() async {
             final extractedData = extractNameAndQuality(file['name']);
             if (extractedData != null) {
               try {
-                final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['year']!, TMDB_API_KEY);
-                if (tmdbData != null && tmdbData.isNotEmpty) {
-                  await storeToMongoDB(
-                    collection,
-                    tmdbData,
+                final tmdbData = await fetchTmdbData(
                     extractedData['name']!,
                     extractedData['year']!,
-                    file['name'],
-                    indexUrl + Uri.encodeComponent(file['name']),
-                    file['modifiedTime'],
-                    file['size'],
-                    file['mimeType'],
-                    extractedData['qualityName']!,
-                    extractedData['qualityVideo']!
-                  );
-                  print('Added Movie ${extractedData['name']} (${extractedData['year']})');
+                    TMDB_API_KEY);
+                if (tmdbData != null && tmdbData.isNotEmpty) {
+                  await storeToMongoDB(
+                      collection,
+                      tmdbData,
+                      extractedData['name']!,
+                      extractedData['year']!,
+                      file['name'],
+                      indexUrl + Uri.encodeComponent(file['name']),
+                      file['modifiedTime'],
+                      file['size'],
+                      file['mimeType'],
+                      extractedData['qualityName']!,
+                      extractedData['qualityVideo']!);
+                  print(
+                      'Added Movie ${extractedData['name']} (${extractedData['year']})');
                 } else {
-                  print('No movie found for ${extractedData['name']} (${extractedData['year']})');
+                  print(
+                      'No movie found for ${extractedData['name']} (${extractedData['year']})');
                 }
               } catch (e) {
-                print('Error fetching TMDB data for ${extractedData['name']} (${extractedData['year']}): $e');
+                print(
+                    'Error fetching TMDB data for ${extractedData['name']} (${extractedData['year']}): $e');
               }
             }
           }
@@ -81,7 +88,8 @@ Future<void> handleRequest() async {
   }
 }
 
-Future<Map<String, dynamic>> fetchScraperData(String url, String nextPageToken, int pageIndex) async {
+Future<Map<String, dynamic>> fetchScraperData(
+    String url, String nextPageToken, int pageIndex) async {
   final response = await http.post(
     Uri.parse(url),
     headers: {
@@ -108,12 +116,15 @@ Future<Map<String, dynamic>> fetchScraperData(String url, String nextPageToken, 
 
 String decryptResponse(String response) {
   final reversedResponse = response.split('').reversed.join('');
-  final encodedString = reversedResponse.substring(24, reversedResponse.length - 20);
+  final encodedString =
+      reversedResponse.substring(24, reversedResponse.length - 20);
   return utf8.decode(base64.decode(encodedString));
 }
 
-Future<Map<String, dynamic>> fetchTmdbData(String name, String year, String apiKey) async {
-  final tmdbUrl = 'https://api.themoviedb.org/3/search/movie?api_key=$apiKey&query=${Uri.encodeComponent(name)}&include_adult=false&language=en-US&primary_release_year=${Uri.encodeComponent(year)}&page=1';
+Future<Map<String, dynamic>> fetchTmdbData(
+    String name, String year, String apiKey) async {
+  final tmdbUrl =
+      'https://api.themoviedb.org/3/search/movie?api_key=$apiKey&query=${Uri.encodeComponent(name)}&include_adult=false&language=en-US&primary_release_year=${Uri.encodeComponent(year)}&page=1';
   final response = await http.get(Uri.parse(tmdbUrl));
 
   if (response.statusCode != 200) {
@@ -139,7 +150,7 @@ Future<void> storeToMongoDB(
   String filenameSize,
   String mimeType,
   String qualityName,
-  String qualityVideo
+  String qualityVideo,
 ) async {
   final movieId = movieData['id'].toString();
 
@@ -155,7 +166,8 @@ Future<void> storeToMongoDB(
     'overview': movieData['overview'],
     'release_date': movieData['release_date'],
     'poster_path': 'https://image.tmdb.org/t/p/w500${movieData['poster_path']}',
-    'backdrop_path': 'https://image.tmdb.org/t/p/w1280${movieData['backdrop_path']}',
+    'backdrop_path':
+        'https://image.tmdb.org/t/p/w1280${movieData['backdrop_path']}',
     'filenames': [
       {
         'filename': filename,
@@ -172,34 +184,38 @@ Future<void> storeToMongoDB(
   await collection.updateOne(
     mongo.where.eq('id', movieData['id']),
     mongo.modify.set('id', movieData['id'])
-                  .set('title', movieData['title'])
-                  .set('genre_ids', movieData['genre_ids'])
-                  .set('original_language', movieData['original_language'])
-                  .set('original_title', movieData['original_title'])
-                  .set('popularity', movieData['popularity'])
-                  .set('vote_count', movieData['vote_count'])
-                  .set('vote_average', movieData['vote_average'])
-                  .set('overview', movieData['overview'])
-                  .set('release_date', movieData['release_date'])
-                  .set('poster_path', 'https://image.tmdb.org/t/p/w500${movieData['poster_path']}')
-                  .set('backdrop_path', 'https://image.tmdb.org/t/p/w1280${movieData['backdrop_path']}')
-                  .set('filenames', [
-                    {
-                      'filename': filename,
-                      'filename_url': filenameUrl,
-                      'mimeType': mimeType,
-                      'qualityName': qualityName,
-                      'qualityVideo': qualityVideo,
-                      'size': filenameSize,
-                      'lastModified': filenameModifiedTime,
-                    }
-                  ]),
+      ..set('title', movieData['title'])
+      ..set('genre_ids', movieData['genre_ids'])
+      ..set('original_language', movieData['original_language'])
+      ..set('original_title', movieData['original_title'])
+      ..set('popularity', movieData['popularity'])
+      ..set('vote_count', movieData['vote_count'])
+      ..set('vote_average', movieData['vote_average'])
+      ..set('overview', movieData['overview'])
+      ..set('release_date', movieData['release_date'])
+      ..set('poster_path',
+          'https://image.tmdb.org/t/p/w500${movieData['poster_path']}')
+      ..set('backdrop_path',
+          'https://image.tmdb.org/t/p/w1280${movieData['backdrop_path']}')
+      ..set('filenames', [
+        {
+          'filename': filename,
+          'filename_url': filenameUrl,
+          'mimeType': mimeType,
+          'qualityName': qualityName,
+          'qualityVideo': qualityVideo,
+          'size': filenameSize,
+          'lastModified': filenameModifiedTime,
+        }
+      ]),
     upsert: true,
   );
 }
 
 Map<String, String>? extractNameAndQuality(String filename) {
-  final regExp = RegExp(r'(?:(\d+)\.)?(.*?)\.(\d{4})\.(\d+p)(?:\.(?:NF|DNSP|AMZN))?\.(.*?)\..*', caseSensitive: false);
+  final regExp = RegExp(
+      r'(?:(\d+)\.)?(.*?)\.(\d{4})\.(\d+p)(?:\.(?:NF|DNSP|AMZN))?\.(.*?)\..*',
+      caseSensitive: false);
   final match = regExp.firstMatch(filename);
   
   if (match != null) {

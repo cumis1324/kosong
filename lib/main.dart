@@ -207,7 +207,7 @@ Map<String, String>? extractNameAndQuality(String filename) {
     final initialDigits = match.group(1);
     final name = '${initialDigits ?? ''} ${match.group(2)?.replaceAll('.', ' ')}'.trim(); // Concatenate and replace dots with spaces
     final year = match.group(3);
-    final qualityVideo = match.group
+    final qualityVideo = match.group(4);
 
     final qualityName = match.group(5);
 

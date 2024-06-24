@@ -18,6 +18,10 @@ jobs:
       uses: dart-lang/setup-dart@v1
       with:
         sdk: 'stable'
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: 'stable'
 
     - name: Install dependencies
       run: flutter pub get

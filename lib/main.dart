@@ -3,7 +3,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:mongo_dart/mongo_dart.dart';
+import 'package:mongo_dart/mongo_dart.dart' as mongo;
 
 const INDEX_URLS = [
   'https://drive.nfgplusmirror.workers.dev/1:/Movie/',

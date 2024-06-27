@@ -39,18 +39,18 @@ Future<void> handleRequest() async {
                 final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['seasonNumber']!, TMDB_API_KEY);
                 if (tmdbData.isNotEmpty) {
                   await storeToFirestore(
-                    tmdbData,
-                    extractedData['name']!,
-                    extractedData['seasonNumber']!,
-                    extractedData['episode']!,
-                    file['name'],
-                    indexUrl + Uri.encodeComponent(file['name']),
-                    file['modifiedTime'] ?? '',
-                    file['size'] ?? '',
-                    file['mimeType'] ?? '',
-                    extractedData['qualityName']!,
-                    extractedData['qualityVideo']!
-                  );
+  tmdbData,
+  extractedSeasonNumber,
+  extractedEpisodeNumber,
+  filename,
+  filenameUrl,
+  filenameModifiedTime,
+  filenameSize,
+  mimeType,
+  qualityName,
+  qualityVideo,
+);
+
                   print('Added File ${file['name']} to Firestore');
                 } else {
                   print('No TMDB data found for ${extractedData['name']} (${extractedData['seasonNumber']})');

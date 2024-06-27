@@ -24,7 +24,6 @@ Future<void> handleRequest() async {
 
     while (hasNextPage) {
       try {
-        print('Fetching data from index URL: $indexUrl, Page: $pageIndex, Token: $nextPageToken');
         final data = await fetchScraperData(indexUrl, nextPageToken, pageIndex);
         if (data == null || !data.containsKey('data') || !data['data'].containsKey('files')) {
           throw Exception('Invalid data structure received from $indexUrl');
@@ -36,12 +35,12 @@ Future<void> handleRequest() async {
           if (file != null && file['mimeType'] != null && file['mimeType'] != 'application/vnd.google-apps.folder') {
             final extractedData = extractNameAndQuality(file['name']);
             if (extractedData != null) {
-              print('Extracted data: $extractedData');
               try {
                 final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['seasonNumber']!, TMDB_API_KEY);
                 if (tmdbData.isNotEmpty) {
                   await storeToFirestore(
                     tmdbData,
+                    extractedData['name']!,
                     extractedData['seasonNumber']!,
                     extractedData['episode']!,
                     file['name'],
@@ -117,7 +116,6 @@ String decryptResponse(String response) {
 
 Future<Map<String, dynamic>> fetchTmdbData(String name, String seasonNumber, String apiKey) async {
   final tmdbUrl = 'https://api.themoviedb.org/3/search/tv?api_key=$apiKey&query=${Uri.encodeComponent(name)}&include_adult=false&language=en-US&page=1';
-  print('Fetching TMDB data for query: $name, Season: $seasonNumber');
   final response = await http.get(Uri.parse(tmdbUrl));
 
   if (response.statusCode != 200) {
@@ -140,7 +138,6 @@ Future<Map<String, dynamic>> fetchTmdbData(String name, String seasonNumber, Str
 
 Future<Map<String, dynamic>> fetchTmdbSeasonData(String seriesId, String seasonNumber, String apiKey) async {
   final tmdbUrl = 'https://api.themoviedb.org/3/tv/$seriesId/season/$seasonNumber?api_key=$apiKey';
-  print('Fetching TMDB season data for series ID: $seriesId, Season: $seasonNumber');
   final response = await http.get(Uri.parse(tmdbUrl));
 
   if (response.statusCode != 200) {
@@ -150,17 +147,21 @@ Future<Map<String, dynamic>> fetchTmdbSeasonData(String seriesId, String seasonN
   return jsonDecode(response.body);
 }
 
-Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String seasonNumber, String episodeNumber, String filename, String filenameUrl, String filenameModifiedTime, String filenameSize, String mimeType, String qualityName, String qualityVideo) async {
+Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String extractedName, String extractedSeasonNumber, String extractedEpisodeNumber, String filename, String filenameUrl, String filenameModifiedTime, String filenameSize, String mimeType, String qualityName, String qualityVideo) async {
   try {
     final seriesId = tmdbData['seriesId'];
     final seasonId = tmdbData['seasonId'];
-    final episodeId = findEpisodeId(tmdbData['seasonData']['episodes'], episodeNumber);
-
-    final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/$episodeId?key=$FIREBASE_API_KEY';
+    final episodeId = '$extractedSeasonNumber$extractedEpisodeNumber'; // Unique episode ID based on season and episode number
+    final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/episodes/$episodeId?key=$FIREBASE_API_KEY';
 
     final payload = {
       'fields': {
-        'filenames': {
+        'episode_number': {'integerValue': int.parse(extractedEpisodeNumber)},
+        'name': {'stringValue': tmdbData['seasonData']['episodes'][int.parse(extractedEpisodeNumber) - 1]['name']},
+        'air_date': {'stringValue': tmdbData['seasonData']['episodes'][int.parse(extractedEpisodeNumber) - 1]['air_date']},
+        'overview': {'stringValue': tmdbData['seasonData']['episodes'][int.parse(extractedEpisodeNumber) - 1]['overview']},
+        'poster_path': {'stringValue': 'https://image.tmdb.org/t/p/w500${tmdbData['seasonData']['episodes'][int.parse(extractedEpisodeNumber) - 1]['still_path']}'},
+        'filename_data': {
           'arrayValue': {
             'values': [
               {
@@ -172,20 +173,19 @@ Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String seasonNumber
                     'qualityVideo': {'stringValue': qualityVideo},
                     'size': {'stringValue': filenameSize},
                     'lastModified': {'stringValue': filenameModifiedTime},
-                  },
-                },
-              },
-            ],
-          },
-        },
-      },
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
     };
 
     final response = await http.patch(
       Uri.parse(firestoreUrl),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $FIREBASE_API_KEY',
       },
       body: jsonEncode(payload),
     );
@@ -194,25 +194,11 @@ Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String seasonNumber
       throw Exception('Failed to store data in Firestore. Status Code: ${response.statusCode}');
     }
 
-    print('Stored data in Firestore for episode $episodeNumber');
+    print('Stored data in Firestore for series ID $seriesId, season ID $seasonId, and episode ID $episodeId');
   } catch (e) {
     print('Error storing data in Firestore: $e');
     throw Exception('Failed to store data in Firestore');
   }
-}
-
-String findEpisodeId(List<dynamic> episodes, String episodeNumber) {
-  for (final episode in episodes) {
-    final episodeNumberStr = episode['episode_number']?.toString();
-    final episodeId = episode['id']?.toString();
-
-    if (episodeNumberStr == episodeNumber && episodeId != null) {
-      return episodeId;
-    }
-  }
-
-  // Handle case where no matching episode ID is found
-  throw Exception('Episode $episodeNumber not found in the episodes list.');
 }
 
 Map<String, String>? extractNameAndQuality(String filename) {

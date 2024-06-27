@@ -32,7 +32,7 @@ Future<void> handleRequest() async {
           if (extractedData != null) {
             try {
               final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['seasonNumber']!, TMDB_API_KEY);
-              if (tmdbData != null && tmdbData.isNotEmpty) {
+              if (tmdbData.isNotEmpty) {
                 await storeToFirestore(
                   tmdbData,
                   extractedData['seasonNumber']!,

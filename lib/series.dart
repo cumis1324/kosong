@@ -191,13 +191,17 @@ Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String extractedNam
     );
 
     if (response.statusCode != 200) {
+      print('Failed to store data in Firestore. Status Code: ${response.statusCode}');
+      print('Firestore URL: $firestoreUrl');
+      print('Payload: $payload');
       throw Exception('Failed to store data in Firestore. Status Code: ${response.statusCode}');
     }
 
     print('Stored data in Firestore for series ID $seriesId, season ID $seasonId, and episode ID $episodeId');
-  } catch (e) {
+  } catch (e, stackTrace) {
     print('Error storing data in Firestore: $e');
-    throw Exception('Failed to store data in Firestore');
+    print('Stack Trace: $stackTrace');
+    throw Exception('Failed to store data in Firestore: $e');
   }
 }
 

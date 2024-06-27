@@ -24,7 +24,7 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
-    - name: Run Dart script
+    - name: Add series 3
       run: dart lib/series.dart
 
     - name: Archive production artifacts

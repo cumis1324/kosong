@@ -181,7 +181,7 @@ Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String seasonNumber
   }
 }
 
-String? findEpisodeId(List<dynamic> episodes, String episodeNumber) {
+String findEpisodeId(List<dynamic> episodes, String episodeNumber) {
   for (final episode in episodes) {
     if (episode['episode_number'].toString() == episodeNumber) {
       return episode['id'].toString();

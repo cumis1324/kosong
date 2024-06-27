@@ -210,21 +210,14 @@ Map<String, String>? extractNameAndQuality(String filename) {
     caseSensitive: false,
   );
   final match = regExp.firstMatch(filename);
-
+  
   if (match != null) {
     final initialDigits = match.group(1);
     final name = '${initialDigits ?? ''} ${match.group(2)?.replaceAll('.', ' ')}'.trim(); // Concatenate and replace dots with spaces
     final seasonNumber = match.group(3); // Numeric part of season (1)
-    final episode = match.group(4); // Episode info (E1)
+    final episode = match.group(4)?.substring(1); // Episode info (E1) - remove 'E' prefix
     final qualityVideo = match.group(5); // Quality (720p)
     final qualityName = match.group(6); // Remaining info (Blueray, etc.)
-
-    print('Extracted details:');
-    print('Name: $name');
-    print('Season Number: $seasonNumber');
-    print('Episode: $episode');
-    print('Quality Video: $qualityVideo');
-    print('Quality Name: $qualityName');
 
     if ((initialDigits != null || match.group(2) != null) && seasonNumber != null && episode != null && qualityVideo != null && qualityName != null) {
       return {
@@ -239,7 +232,6 @@ Map<String, String>? extractNameAndQuality(String filename) {
 
   return null;
 }
-
 
 void main() {
   handleRequest().catchError((error) {

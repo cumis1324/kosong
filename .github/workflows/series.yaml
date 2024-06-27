@@ -27,8 +27,4 @@ jobs:
     - name: Add series 3
       run: dart lib/series.dart
 
-    - name: Archive production artifacts
-      uses: actions/upload-artifact@v2
-      with:
-        name: dart-output
-        path: ./output-directory  # Change to the path where your script outputs files
+

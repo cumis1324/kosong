@@ -24,6 +24,7 @@ Future<void> handleRequest() async {
 
     while (hasNextPage) {
       try {
+        print('Fetching data from index URL: $indexUrl, Page: $pageIndex, Token: $nextPageToken');
         final data = await fetchScraperData(indexUrl, nextPageToken, pageIndex);
         if (data == null || !data.containsKey('data') || !data['data'].containsKey('files')) {
           throw Exception('Invalid data structure received from $indexUrl');
@@ -35,6 +36,7 @@ Future<void> handleRequest() async {
           if (file != null && file['mimeType'] != null && file['mimeType'] != 'application/vnd.google-apps.folder') {
             final extractedData = extractNameAndQuality(file['name']);
             if (extractedData != null) {
+              print('Extracted data: $extractedData');
               try {
                 final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['seasonNumber']!, TMDB_API_KEY);
                 if (tmdbData.isNotEmpty) {
@@ -115,6 +117,7 @@ String decryptResponse(String response) {
 
 Future<Map<String, dynamic>> fetchTmdbData(String name, String seasonNumber, String apiKey) async {
   final tmdbUrl = 'https://api.themoviedb.org/3/search/tv?api_key=$apiKey&query=${Uri.encodeComponent(name)}&include_adult=false&language=en-US&page=1';
+  print('Fetching TMDB data for query: $name, Season: $seasonNumber');
   final response = await http.get(Uri.parse(tmdbUrl));
 
   if (response.statusCode != 200) {
@@ -137,6 +140,7 @@ Future<Map<String, dynamic>> fetchTmdbData(String name, String seasonNumber, Str
 
 Future<Map<String, dynamic>> fetchTmdbSeasonData(String seriesId, String seasonNumber, String apiKey) async {
   final tmdbUrl = 'https://api.themoviedb.org/3/tv/$seriesId/season/$seasonNumber?api_key=$apiKey';
+  print('Fetching TMDB season data for series ID: $seriesId, Season: $seasonNumber');
   final response = await http.get(Uri.parse(tmdbUrl));
 
   if (response.statusCode != 200) {
@@ -147,45 +151,52 @@ Future<Map<String, dynamic>> fetchTmdbSeasonData(String seriesId, String seasonN
 }
 
 Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String seasonNumber, String episodeNumber, String filename, String filenameUrl, String filenameModifiedTime, String filenameSize, String mimeType, String qualityName, String qualityVideo) async {
-  final seriesId = tmdbData['seriesId'];
-  final seasonId = tmdbData['seasonId'];
-  final episodeId = findEpisodeId(tmdbData['seasonData']['episodes'], episodeNumber);
+  try {
+    final seriesId = tmdbData['seriesId'];
+    final seasonId = tmdbData['seasonId'];
+    final episodeId = findEpisodeId(tmdbData['seasonData']['episodes'], episodeNumber);
 
-  final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/$episodeId/filenames';
+    final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/episodes/$episodeId';
 
-  final payload = {
-    'fields': {
-      'filenames': {
-        'arrayValue': {
-          'values': [
-            {
-              'mapValue': {
-                'fields': {
-                  'filename_url': {'stringValue': filenameUrl},
-                  'mimeType': {'stringValue': mimeType},
-                  'qualityName': {'stringValue': qualityName},
-                  'qualityVideo': {'stringValue': qualityVideo},
-                  'size': {'stringValue': filenameSize},
-                  'lastModified': {'stringValue': filenameModifiedTime},
+    final payload = {
+      'fields': {
+        'filenames': {
+          'arrayValue': {
+            'values': [
+              {
+                'mapValue': {
+                  'fields': {
+                    'filename_url': {'stringValue': filenameUrl},
+                    'mimeType': {'stringValue': mimeType},
+                    'qualityName': {'stringValue': qualityName},
+                    'qualityVideo': {'stringValue': qualityVideo},
+                    'size': {'stringValue': filenameSize},
+                    'lastModified': {'stringValue': filenameModifiedTime},
+                  },
                 },
               },
-            },
-          ],
+            ],
+          },
         },
       },
-    },
-  };
+    };
 
-  final response = await http.patch(
-    Uri.parse(firestoreUrl),
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $FIREBASE_API_KEY',
-    },
-    body: jsonEncode(payload),
-  );
+    final response = await http.patch(
+      Uri.parse(firestoreUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $FIREBASE_API_KEY',
+      },
+      body: jsonEncode(payload),
+    );
 
-  if (response.statusCode != 200) {
+    if (response.statusCode != 200) {
+      throw Exception('Failed to store data in Firestore. Status Code: ${response.statusCode}');
+    }
+
+    print('Stored data in Firestore for episode $episodeNumber');
+  } catch (e) {
+    print('Error storing data in Firestore: $e');
     throw Exception('Failed to store data in Firestore');
   }
 }

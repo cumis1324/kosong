@@ -156,7 +156,7 @@ Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String seasonNumber
     final seasonId = tmdbData['seasonId'];
     final episodeId = findEpisodeId(tmdbData['seasonData']['episodes'], episodeNumber);
 
-    final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/episodes/$episodeId';
+    final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/$episodeId?key=$FIREBASE_API_KEY';
 
     final payload = {
       'fields': {

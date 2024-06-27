@@ -15,7 +15,7 @@ RUN flutter pub get
 COPY . .
 
 # Compile Dart ahead-of-time (AOT) to improve startup time
-RUN dart compile exe lib/main.dart -o main
+RUN dart compile exe lib/series.dart -o main
 
 # Command to run the compiled Dart application
 CMD ["./main"]

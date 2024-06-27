@@ -187,7 +187,9 @@ String findEpisodeId(List<dynamic> episodes, String episodeNumber) {
       return episode['id'].toString();
     }
   }
-  return null;
+  
+  // Handle case where no matching episode ID is found
+  throw Exception('Episode $episodeNumber not found in the episodes list.');
 }
 
 Map<String, String>? extractNameAndQuality(String filename) {

@@ -10,7 +10,7 @@ const INDEX_URLS = [
 ];
 const TMDB_API_KEY = '75399494372c92bd800f70079dff476b';
 const FIREBASE_PROJECT_ID = 'nfgview-160c7';
-const FIREBASE_API_KEY = 'AIzaSyCiFlbEyGtH7ijFWUFBhRtTE1EDICqHw3o';
+const FIREBASE_API_KEY = 'AIzaSyCiFlbEyGtH7ijFWUFBhRtTE1EDICqHw3o'; // Replace with your Firebase API key
 const FIREBASE_COLLECTION = 'series';
 
 Future<void> handleRequest() async {
@@ -38,19 +38,22 @@ Future<void> handleRequest() async {
               try {
                 final tmdbData = await fetchTmdbData(extractedData['name']!, extractedData['seasonNumber']!, TMDB_API_KEY);
                 if (tmdbData.isNotEmpty) {
+                  final seasonData = tmdbData['seasonData'];
+                  final episodeId = findEpisodeId(seasonData['episodes'], extractedData['episode']!);
+                  
                   await storeToFirestore(
-  tmdbData,
-  extractedSeasonNumber,
-  extractedEpisodeNumber,
-  filename,
-  filenameUrl,
-  filenameModifiedTime,
-  filenameSize,
-  mimeType,
-  qualityName,
-  qualityVideo,
-);
-
+                    tmdbData,
+                    extractedData['seasonNumber']!,
+                    extractedData['episode']!,
+                    file['name'],
+                    indexUrl + Uri.encodeComponent(file['name']),
+                    file['modifiedTime'] ?? '',
+                    file['size'] ?? '',
+                    file['mimeType'] ?? '',
+                    extractedData['qualityName']!,
+                    extractedData['qualityVideo']!,
+                    episodeId,
+                  );
                   print('Added File ${file['name']} to Firestore');
                 } else {
                   print('No TMDB data found for ${extractedData['name']} (${extractedData['seasonNumber']})');
@@ -147,74 +150,69 @@ Future<Map<String, dynamic>> fetchTmdbSeasonData(String seriesId, String seasonN
   return jsonDecode(response.body);
 }
 
-Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String extractedSeasonNumber, String extractedEpisodeNumber, String filename, String filenameUrl, String filenameModifiedTime, String filenameSize, String mimeType, String qualityName, String qualityVideo) async {
+Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String extractedSeasonNumber, String extractedEpisodeNumber, String filename, String filenameUrl, String filenameModifiedTime, String filenameSize, String mimeType, String qualityName, String qualityVideo, String episodeId) async {
   try {
     final seriesId = tmdbData['seriesId'];
     final seasonId = tmdbData['seasonId'];
 
-    // Find the episode in seasonData based on episode_number
-    final episodes = tmdbData['seasonData']['episodes'];
-    final episodeData = episodes.firstWhere((episode) => episode['episode_number'].toString() == extractedEpisodeNumber, orElse: () => null);
+    final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/episodes/$episodeId';
 
-    if (episodeData != null) {
-      final episodeId = episodeData['id'].toString();
-
-      final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/episodes/$episodeId?key=$FIREBASE_API_KEY';
-
-      final payload = {
-        'fields': {
-          'episode_number': {'integerValue': int.parse(extractedEpisodeNumber)},
-          'name': {'stringValue': episodeData['name']},
-          'air_date': {'stringValue': episodeData['air_date']},
-          'overview': {'stringValue': episodeData['overview']},
-          'poster_path': {'stringValue': 'https://image.tmdb.org/t/p/w500${episodeData['still_path']}'},
-          'filename_data': {
-            'arrayValue': {
-              'values': [
-                {
-                  'mapValue': {
-                    'fields': {
-                      'filename_url': {'stringValue': filenameUrl},
-                      'mimeType': {'stringValue': mimeType},
-                      'qualityName': {'stringValue': qualityName},
-                      'qualityVideo': {'stringValue': qualityVideo},
-                      'size': {'stringValue': filenameSize},
-                      'lastModified': {'stringValue': filenameModifiedTime},
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        }
-      };
-
-      final response = await http.patch(
-        Uri.parse(firestoreUrl),
-        headers: {
-          'Content-Type': 'application/json',
+    final payload = {
+      'fields': {
+        'filenames': {
+          'arrayValue': {
+            'values': [
+              {
+                'mapValue': {
+                  'fields': {
+                    'filename_url': {'stringValue': filenameUrl},
+                    'mimeType': {'stringValue': mimeType},
+                    'qualityName': {'stringValue': qualityName},
+                    'qualityVideo': {'stringValue': qualityVideo},
+                    'size': {'stringValue': filenameSize},
+                    'lastModified': {'stringValue': filenameModifiedTime},
+                  },
+                },
+              },
+            ],
+          },
         },
-        body: jsonEncode(payload),
-      );
+      },
+    };
 
-      if (response.statusCode != 200) {
-        print('Failed to store data in Firestore. Status Code: ${response.statusCode}');
-        print('Firestore URL: $firestoreUrl');
-        print('Payload: $payload');
-        throw Exception('Failed to store data in Firestore. Status Code: ${response.statusCode}');
-      }
+    final response = await http.patch(
+      Uri.parse(firestoreUrl),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $FIREBASE_API_KEY',
+      },
+      body: jsonEncode(payload),
+    );
 
-      print('Stored data in Firestore for series ID $seriesId, season ID $seasonId, and episode ID $episodeId');
-    } else {
-      throw Exception('Episode data not found for episode number $extractedEpisodeNumber');
+    if (response.statusCode != 200) {
+      throw Exception('Failed to store data in Firestore. Status Code: ${response.statusCode}');
     }
-  } catch (e, stackTrace) {
+
+    print('Stored data in Firestore for episode $extractedEpisodeNumber');
+  } catch (e) {
     print('Error storing data in Firestore: $e');
-    print('Stack Trace: $stackTrace');
-    throw Exception('Failed to store data in Firestore: $e');
+    throw Exception('Failed to store data in Firestore');
   }
 }
 
+String findEpisodeId(List<dynamic> episodes, String episodeNumber) {
+  for (final episode in episodes) {
+    final episodeNumberStr = episode['episode_number']?.toString();
+    final episodeId = episode['id']?.toString();
+
+    if (episodeNumberStr == episodeNumber && episodeId != null) {
+      return episodeId;
+    }
+  }
+
+  // Handle case where no matching episode ID is found
+  throw Exception('Episode $episodeNumber not found in the episodes list.');
+}
 
 Map<String, String>? extractNameAndQuality(String filename) {
   final regExp = RegExp(
@@ -237,16 +235,15 @@ Map<String, String>? extractNameAndQuality(String filename) {
         'seasonNumber': seasonNumber,
         'episode': episode,
         'qualityVideo': qualityVideo,
-        'qualityName': qualityName
+        'qualityName': qualityName,
       };
     }
   }
-
-  return null;
+  
+  return null; // Return null if no match is found
 }
 
 void main() {
-  handleRequest().catchError((error) {
-    print('Error: $error');
-  });
+  handleRequest();
 }
+

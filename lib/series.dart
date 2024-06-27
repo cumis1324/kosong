@@ -147,63 +147,74 @@ Future<Map<String, dynamic>> fetchTmdbSeasonData(String seriesId, String seasonN
   return jsonDecode(response.body);
 }
 
-Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String extractedName, String extractedSeasonNumber, String extractedEpisodeNumber, String filename, String filenameUrl, String filenameModifiedTime, String filenameSize, String mimeType, String qualityName, String qualityVideo) async {
+Future<void> storeToFirestore(Map<String, dynamic> tmdbData, String extractedSeasonNumber, String extractedEpisodeNumber, String filename, String filenameUrl, String filenameModifiedTime, String filenameSize, String mimeType, String qualityName, String qualityVideo) async {
   try {
     final seriesId = tmdbData['seriesId'];
     final seasonId = tmdbData['seasonId'];
-    final episodeId = '$extractedSeasonNumber$extractedEpisodeNumber'; // Unique episode ID based on season and episode number
-    final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/episodes/$episodeId?key=$FIREBASE_API_KEY';
 
-    final payload = {
-      'fields': {
-        'episode_number': {'integerValue': int.parse(extractedEpisodeNumber)},
-        'name': {'stringValue': tmdbData['seasonData']['episodes'][int.parse(extractedEpisodeNumber) - 1]['name']},
-        'air_date': {'stringValue': tmdbData['seasonData']['episodes'][int.parse(extractedEpisodeNumber) - 1]['air_date']},
-        'overview': {'stringValue': tmdbData['seasonData']['episodes'][int.parse(extractedEpisodeNumber) - 1]['overview']},
-        'poster_path': {'stringValue': 'https://image.tmdb.org/t/p/w500${tmdbData['seasonData']['episodes'][int.parse(extractedEpisodeNumber) - 1]['still_path']}'},
-        'filename_data': {
-          'arrayValue': {
-            'values': [
-              {
-                'mapValue': {
-                  'fields': {
-                    'filename_url': {'stringValue': filenameUrl},
-                    'mimeType': {'stringValue': mimeType},
-                    'qualityName': {'stringValue': qualityName},
-                    'qualityVideo': {'stringValue': qualityVideo},
-                    'size': {'stringValue': filenameSize},
-                    'lastModified': {'stringValue': filenameModifiedTime},
+    // Find the episode in seasonData based on episode_number
+    final episodes = tmdbData['seasonData']['episodes'];
+    final episodeData = episodes.firstWhere((episode) => episode['episode_number'].toString() == extractedEpisodeNumber, orElse: () => null);
+
+    if (episodeData != null) {
+      final episodeId = episodeData['id'].toString();
+
+      final firestoreUrl = 'https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/$FIREBASE_COLLECTION/$seriesId/$seasonId/episodes/$episodeId?key=$FIREBASE_API_KEY';
+
+      final payload = {
+        'fields': {
+          'episode_number': {'integerValue': int.parse(extractedEpisodeNumber)},
+          'name': {'stringValue': episodeData['name']},
+          'air_date': {'stringValue': episodeData['air_date']},
+          'overview': {'stringValue': episodeData['overview']},
+          'poster_path': {'stringValue': 'https://image.tmdb.org/t/p/w500${episodeData['still_path']}'},
+          'filename_data': {
+            'arrayValue': {
+              'values': [
+                {
+                  'mapValue': {
+                    'fields': {
+                      'filename_url': {'stringValue': filenameUrl},
+                      'mimeType': {'stringValue': mimeType},
+                      'qualityName': {'stringValue': qualityName},
+                      'qualityVideo': {'stringValue': qualityVideo},
+                      'size': {'stringValue': filenameSize},
+                      'lastModified': {'stringValue': filenameModifiedTime},
+                    }
                   }
                 }
-              }
-            ]
+              ]
+            }
           }
         }
+      };
+
+      final response = await http.patch(
+        Uri.parse(firestoreUrl),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode != 200) {
+        print('Failed to store data in Firestore. Status Code: ${response.statusCode}');
+        print('Firestore URL: $firestoreUrl');
+        print('Payload: $payload');
+        throw Exception('Failed to store data in Firestore. Status Code: ${response.statusCode}');
       }
-    };
 
-    final response = await http.patch(
-      Uri.parse(firestoreUrl),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(payload),
-    );
-
-    if (response.statusCode != 200) {
-      print('Failed to store data in Firestore. Status Code: ${response.statusCode}');
-      print('Firestore URL: $firestoreUrl');
-      print('Payload: $payload');
-      throw Exception('Failed to store data in Firestore. Status Code: ${response.statusCode}');
+      print('Stored data in Firestore for series ID $seriesId, season ID $seasonId, and episode ID $episodeId');
+    } else {
+      throw Exception('Episode data not found for episode number $extractedEpisodeNumber');
     }
-
-    print('Stored data in Firestore for series ID $seriesId, season ID $seasonId, and episode ID $episodeId');
   } catch (e, stackTrace) {
     print('Error storing data in Firestore: $e');
     print('Stack Trace: $stackTrace');
     throw Exception('Failed to store data in Firestore: $e');
   }
 }
+
 
 Map<String, String>? extractNameAndQuality(String filename) {
   final regExp = RegExp(
